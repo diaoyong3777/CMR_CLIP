@@ -9,7 +9,7 @@
 
 
 ## 项目结构如下
-
+![CLIP](readme.png)
 
 ## See Also
 
