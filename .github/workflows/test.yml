@@ -1,0 +1,78 @@
+# 定义工作流的名称
+name: test  # 这个工作流叫做"test"
+
+# 定义触发条件：什么时候运行这个工作流
+on:
+  push:  # 当代码被推送到仓库时触发
+    branches:
+      - main  # 只在推送到main分支时触发（保护主分支质量）
+  pull_request:  # 当创建或更新pull request时触发
+    branches:
+      - main  # 针对目标分支是main的PR进行测试
+
+# 定义要执行的任务
+jobs:
+  # 任务名称：CLIP-test
+  CLIP-test:
+    # 运行环境：使用GitHub提供的最新版Ubuntu系统
+    runs-on: ubuntu-latest
+    
+    # 定义测试策略：矩阵测试（同时测试多个配置组合）
+    strategy:
+      matrix:
+        # Python版本矩阵：目前只测试3.8，但可以扩展为[3.8, 3.9, 3.10]
+        python-version: [3.8]
+        
+        # PyTorch版本矩阵：测试三个重要版本
+        pytorch-version: [1.7.1, 1.9.1, 1.10.1]
+        
+        # 定义版本对应关系：PyTorch和torchvision需要版本匹配
+        include:
+          # 组合1：PyTorch 1.7.1 + torchvision 0.8.2（对应版本）
+          - python-version: 3.8
+            pytorch-version: 1.7.1
+            torchvision-version: 0.8.2
+          
+          # 组合2：PyTorch 1.9.1 + torchvision 0.10.1
+          - python-version: 3.8
+            pytorch-version: 1.9.1
+            torchvision-version: 0.10.1
+          
+          # 组合3：PyTorch 1.10.1 + torchvision 0.11.2
+          - python-version: 3.8
+            pytorch-version: 1.10.1
+            torchvision-version: 0.11.2
+    
+    # 定义执行步骤（每个步骤按顺序执行）
+    steps:
+      # 步骤1：设置Miniconda环境
+      # 使用社区维护的conda安装action
+      - uses: conda-incubator/setup-miniconda@v2
+      
+      # 步骤2：在test环境中安装指定的Python和PyTorch版本
+      - run: conda install -n test python=${{ matrix.python-version }} pytorch=${{ matrix.pytorch-version }} torchvision=${{ matrix.torchvision-version }} cpuonly -c pytorch
+        # -n test: 在名为test的conda环境中安装
+        # python=${{ matrix.python-version }}: 安装矩阵中指定的Python版本
+        # pytorch=${{ matrix.pytorch-version }}: 安装指定的PyTorch版本
+        # torchvision=${{ matrix.torchvision-version }}: 安装对应版本的torchvision
+        # cpuonly: 安装CPU版本的PyTorch（不需要GPU，节省资源）
+        # -c pytorch: 从PyTorch官方channel安装
+      
+      # 步骤3：检出代码（将仓库代码下载到工作环境）
+      - uses: actions/checkout@v2
+      
+      # 步骤4：将conda环境的bin目录添加到系统PATH
+      - run: echo "$CONDA/envs/test/bin" >> $GITHUB_PATH
+        # 这样后续命令就能使用conda环境中安装的Python和工具
+      
+      # 步骤5：安装pytest测试框架
+      - run: pip install pytest
+      
+      # 步骤6：安装当前项目（以可编辑模式安装）
+      - run: pip install .
+        # 点号(.)表示当前目录，会执行setup.py安装CLIP包
+        # 这样测试代码就能导入CLIP模块了
+      
+      # 步骤7：运行pytest进行测试
+      - run: pytest
+        # 自动发现并运行tests/目录下的所有测试文件
